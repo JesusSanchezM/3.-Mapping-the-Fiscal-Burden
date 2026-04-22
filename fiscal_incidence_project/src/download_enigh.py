@@ -14,7 +14,7 @@ BASE_URL = "https://www.inegi.org.mx/contenidos/programas/enigh/nc/{year}/microd
 
 YEARS = [2018, 2024]
 # Módulos clave para análisis de incidencia fiscal (Ingresos y Gastos)
-MODULES = ["ingresos", "gastoshogar", "concentradohogar"]
+MODULES = ["ingresos", "gastoshogar", "concentradohogar", "poblacion"]
 
 def download_and_extract(year, module):
     url = BASE_URL.format(year=year, module=module)
@@ -56,3 +56,7 @@ if __name__ == "__main__":
         for module in MODULES:
             download_and_extract(year, module)
     print("\n✨ Proceso de descarga finalizado.")   
+
+
+
+# WRITE "python3 fiscal_incidence_project/src/download_enigh.py" TO RUN THIS BLOCK ON TERMINAL 
