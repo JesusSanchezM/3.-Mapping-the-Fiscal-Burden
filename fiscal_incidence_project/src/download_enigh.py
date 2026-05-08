@@ -1,6 +1,7 @@
 import requests
 import zipfile
 import sys
+from tqdm import tqdm
 from pathlib import Path
 
 # Añadir la raíz al path para poder importar config
@@ -14,7 +15,7 @@ BASE_URL = "https://www.inegi.org.mx/contenidos/programas/enigh/nc/{year}/microd
 
 YEARS = [2018, 2024]
 # Módulos clave para análisis de incidencia fiscal (Ingresos y Gastos)
-MODULES = ["ingresos", "gastoshogar", "concentradohogar", "poblacion"]
+MODULES = ["ingresos", "gastoshogar", "concentradohogar", "poblacion", "gastospersona", "trabajos"]
 
 def download_and_extract(year, module):
     url = BASE_URL.format(year=year, module=module)
@@ -26,27 +27,40 @@ def download_and_extract(year, module):
         return
 
     try:
-        response = requests.get(url, stream=True)
-        if response.status_code != 200:
-            print(f"⚠️  No disponible: {module} {year}")
-            return
+        with requests.get(url, stream=True, timeout=30) as response:
+            response.raise_for_status()
 
-        print(f"⬇️  Descargando {module} {year}...")
-        with open(zip_path, "wb") as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                f.write(chunk)
+            total_size = int(response.headers.get('content-length', 0))
+            print(f"⬇️  Descargando {module} {year}...")
+
+            with open(zip_path, "wb") as f, tqdm(
+                total=total_size, unit='B', unit_scale=True
+            ) as bar:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+                        bar.update(len(chunk))
 
         with zipfile.ZipFile(zip_path, "r") as zip_ref:
-            for file_name in zip_ref.namelist():
-                if file_name.lower().endswith(".csv"):
-                    # Extraer temporalmente
-                    zip_ref.extract(file_name, RAW_DIR)
-                    # Renombrar y mover a la raíz de raw/
-                    (RAW_DIR / file_name).replace(RAW_DIR / final_csv_name)
-                    print(f"   ✅ Guardado como: {final_csv_name}")
+            csv_files = [f for f in zip_ref.namelist() if f.lower().endswith(".csv")]
 
-        zip_path.unlink() # Limpiar el zip
-        
+            if not csv_files:
+                raise ValueError("No CSV encontrado en el ZIP")
+
+            file_name = csv_files[0]
+            zip_ref.extract(file_name, RAW_DIR)
+            (RAW_DIR / file_name).replace(RAW_DIR / final_csv_name)
+
+            print(f"   ✅ Guardado como: {final_csv_name}")
+
+        zip_path.unlink()
+
+    except KeyboardInterrupt:
+        print("\n⛔ Descarga interrumpida. Limpiando...")
+        if zip_path.exists():
+            zip_path.unlink()
+        raise
+
     except Exception as e:
         print(f"❌ Error en {module} {year}: {e}")
 
